@@ -63,6 +63,8 @@ mod udf;
 pub mod udtf;
 mod udwf;
 pub mod utils;
+mod iceberg_catalog;
+use iceberg_catalog::PyIcebergSessionContext;
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -95,6 +97,7 @@ fn _internal(py: Python, m: Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<physical_plan::PyExecutionPlan>()?;
     m.add_class::<record_batch::PyRecordBatch>()?;
     m.add_class::<record_batch::PyRecordBatchStream>()?;
+    m.add_class::<PyIcebergSessionContext>()?;
 
     // Register `common` as a submodule. Matching `datafusion-common` https://docs.rs/datafusion-common/latest/datafusion_common/
     let common = PyModule::new(py, "common")?;
