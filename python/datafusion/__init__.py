@@ -32,6 +32,7 @@ from . import functions, object_store, substrait, unparser
 
 # The following imports are okay to remain as opaque to the user.
 from ._internal import Config
+from ._internal import PyIcebergSessionContext
 from .catalog import Catalog, Database, Table
 from .common import (
     DFSchema,
@@ -106,6 +107,7 @@ __all__ = [
     "udtf",
     "udwf",
     "unparser",
+    "PyIcebergSessionContext",
 ]
 
 
