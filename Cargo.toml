@@ -49,6 +49,10 @@ async-trait = "0.1.88"
 futures = "0.3"
 object_store = { version = "0.12.0", features = ["aws", "gcp", "azure", "http"] }
 url = "2"
+thiserror = "=2.0.12"
+datafusion_iceberg = { git = "https://github.com/JanKaul/iceberg-rust.git", package = "datafusion_iceberg",  branch = "main" }
+iceberg-sql-catalog = { git = "https://github.com/JanKaul/iceberg-rust.git",  branch = "main" }
+iceberg-rust = { git = "https://github.com/JanKaul/iceberg-rust.git", package = "iceberg-rust", branch = "main" }
 
 [build-dependencies]
 prost-types = "0.13.1" # keep in line with `datafusion-substrait`
