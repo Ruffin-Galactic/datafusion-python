@@ -5,6 +5,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyAny;
 use pyo3::{Py, Python, PyResult};
 use pyo3::exceptions::{PyValueError, PyRuntimeError, PyTimeoutError};
+use pyo3::types::PyBytes;
 
 use datafusion::prelude::*;
 use datafusion::execution::context::{SessionContext};
@@ -25,8 +26,12 @@ use crate::context::PySessionContext;
 use iceberg_rust::table::Table;
 use tokio::time::{timeout, Duration};
 use datafusion::execution::disk_manager::DiskManagerConfig;
-
-
+use arrow::ipc::writer::FileWriter;
+use arrow::ipc::reader::FileReader;
+use std::io::Cursor;
+use arrow::record_batch::RecordBatch;
+use arrow::datatypes::Schema;
+use arrow::datatypes::SchemaRef; 
 
 #[pyclass]
 pub struct PyIcebergSessionContext {
@@ -155,29 +160,72 @@ impl PyIcebergSessionContext {
             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Query failed: {e}"))
         })?;
         
-        match rt.block_on(df.collect()) {
-            Ok(batches) => {
-                let no_valid_batches = batches.is_empty()
-                || batches
-                    .iter()
-                    .all(|b| b.num_rows() == 0 || b.num_columns() == 0);
+        
+        // Grab schema before moving df
+        let df_schema = Arc::new(df.schema().as_arrow().clone());
+    // Now it’s safe to move df
+    let batches = rt.block_on(df.collect()).map_err(|e| {
+        let msg = format!("{e:?}");
+        if msg.contains("ResourcesExhausted") || msg.contains("Additional allocation failed") {
+            PyRuntimeError::new_err(
+                "Query failed due to memory exhaustion. Try simplifying the query or increasing memory limits.",
+            )
+        } else {
+            PyRuntimeError::new_err(format!("Query execution failed: {e}"))
+        }
+    })?;
 
-            if no_valid_batches {
-                return Err(PyRuntimeError::new_err(
-                    "Query returned no usable results (empty rows or incomplete schema).",
-                ));
+    if batches.is_empty() {
+        if df_schema.fields().is_empty() {
+            return Err(PyRuntimeError::new_err(
+                "Query returned no usable results (empty schema).",
+            ));
+        }
+
+        let empty_batch = RecordBatch::new_empty(df_schema.clone());
+        let mut buffer = Vec::new();
+        {
+            let mut writer = FileWriter::try_new(&mut buffer, &df_schema)
+                .map_err(|e| PyRuntimeError::new_err(format!("IPC writer creation failed: {e}")))?;
+            writer.write(&empty_batch)
+                .map_err(|e| PyRuntimeError::new_err(format!("IPC write failed: {e}")))?;
+            writer.finish()
+                .map_err(|e| PyRuntimeError::new_err(format!("IPC finish failed: {e}")))?;
+        }
+
+        Ok(PyBytes::new(py, &buffer).into())
+    } else {
+        let schema = batches[0].schema();
+        let mut buffer = Vec::new();
+        {
+            let mut writer = FileWriter::try_new(&mut buffer, &schema)
+                .map_err(|e| PyRuntimeError::new_err(format!("IPC writer creation failed: {e}")))?;
+            for batch in batches {
+                writer.write(&batch)
+                    .map_err(|e| PyRuntimeError::new_err(format!("IPC write failed: {e}")))?;
             }
-                batches.into_pyarrow(py)
-            }
-            Err(e) => {
-                let msg = format!("{e:?}");
-                if msg.contains("ResourcesExhausted") || msg.contains("Additional allocation failed") {
-                    Err(PyRuntimeError::new_err(" Query failed due to memory exhaustion. Try simplifying the query or increasing memory limits."))
-                } else {
-                    Err(PyRuntimeError::new_err(format!("Query execution failed: {e}")))
+            writer.finish()
+                .map_err(|e| PyRuntimeError::new_err(format!("IPC finish failed: {e}")))?;
+        }
+
+        Ok(PyBytes::new(py, &buffer).into())
+    }
+        
+
+    }
+    pub fn dump_tables(&self) -> PyResult<Vec<String>> {
+        let mut tables = vec![];
+        for catalog_name in self.inner.catalog_names() {
+            if let Some(catalog) = self.inner.catalog(&catalog_name) {
+                for schema_name in catalog.schema_names() {
+                    if let Some(schema) = catalog.schema(&schema_name) {
+                        for table_name in schema.table_names() {
+                            tables.push(format!("{}.{}.{}", catalog_name, schema_name, table_name));
+                        }
+                    }
                 }
             }
         }
-
+        Ok(tables)
     }
 }
