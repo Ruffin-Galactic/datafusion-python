@@ -21,7 +21,7 @@ build-backend = "maturin"
 
 [project]
 name = "datafusion"
-description = "Build and run queries against data"
+description = "Build and run queries against data - built for Kastor"
 readme = "README.md"
 license = { file = "LICENSE.txt" }
 requires-python = ">=3.9"
@@ -49,7 +49,7 @@ dynamic = ["version"]
 [project.urls]
 homepage = "https://datafusion.apache.org/python"
 documentation = "https://datafusion.apache.org/python"
-repository = "https://github.com/apache/datafusion-python"
+repository = "https://github.com/Ruffin-Galactic/datafusion-python"
 
 [tool.isort]
 profile = "black"
