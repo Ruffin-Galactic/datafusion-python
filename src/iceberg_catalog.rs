@@ -10,6 +10,8 @@ use pyo3::types::PyBytes;
 use datafusion::prelude::*;
 use datafusion::execution::context::{SessionContext};
 use datafusion::execution::runtime_env::{RuntimeEnv, RuntimeConfig};
+use datafusion::dataframe::DataFrame;
+use crate::dataframe::PyDataFrame; // existing PyO3-exposed wrapper
 
 use tokio::runtime::Runtime;
 use arrow::pyarrow::IntoPyArrow;
@@ -229,10 +231,12 @@ impl PyIcebergSessionContext {
         Ok(tables)
     }
 
-    pub fn plan(&self, query: &str) -> PyResult<DataFrame> {
-        let rt = Runtime::new().map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        let df = rt.block_on(self.inner.sql(query))
-            .map_err(|e| PyRuntimeError::new_err(format!("SQL parsing failed: {e}")))?;
-        Ok(df)
+    pub fn plan(&self, query: &str) -> PyResult<PyDataFrame> {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let df = rt
+            .block_on(self.inner.sql(query))
+            .map_err(|e| PyRuntimeError::new_err(format!("SQL error: {e}")))?;
+        Ok(PyDataFrame::new(df))
+
     }
 }
