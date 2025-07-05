@@ -24,14 +24,37 @@
 
 This is a Python library that binds to [Apache Arrow](https://arrow.apache.org/) in-memory query engine [DataFusion](https://github.com/apache/datafusion).
 
-DataFusion's Python bindings can be used as a foundation for building new data systems in Python. Here are some examples:
+## Build the wheel using a docker container.
+```shell
+docker run --rm -v $(pwd):/io \
+  -e CARGO_TARGET_DIR=/io/target/manylinux2014 \
+  quay.io/pypa/manylinux2014_x86_64:latest bash -c "
+  set -eux &&
 
-- [Dask SQL](https://github.com/dask-contrib/dask-sql) uses DataFusion's Python bindings for SQL parsing, query
-  planning, and logical plan optimizations, and then transpiles the logical plan to Dask operations for execution.
-- [DataFusion Ballista](https://github.com/apache/datafusion-ballista) is a distributed SQL query engine that extends
-  DataFusion's Python bindings for distributed use cases.
-- [DataFusion Ray](https://github.com/apache/datafusion-ray) is another distributed query engine that uses
-  DataFusion's Python bindings.
+  yum install -y unzip curl gcc make &&
+
+  # Install modern protoc
+  curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v26.1/protoc-26.1-linux-x86_64.zip &&
+  unzip protoc-26.1-linux-x86_64.zip -d /usr/local &&
+  export PATH=/usr/local/bin:\$PATH &&
+
+  # Install Rust
+  curl https://sh.rustup.rs -sSf | sh -s -- -y &&
+  source \$HOME/.cargo/env &&
+  export CARGO_BUILD_JOBS=\$(nproc) &&
+  export CARGO_TARGET_DIR=/io/target/manylinux2014 &&
+
+  # Clean and regenerate Cargo.lock
+  cd /io &&
+  rm -f Cargo.lock &&
+  cargo generate-lockfile &&
+
+  # Build wheel
+  /opt/python/cp310-cp310/bin/python -m pip install maturin &&
+  /opt/python/cp310-cp310/bin/python -m maturin build --release -i /opt/python/cp310-cp310/bin/python
+"
+```
+
 
 ## Features
 
